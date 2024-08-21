@@ -1,0 +1,73 @@
+#!/bin/dash
+
+# File that creates/deletes/lists a branch/es replicating
+# the repository of the latest commit
+
+if [ ! -e ".pig/.commit0" ]
+then
+    echo "pigs-branch: error: this command can not be run until after the first commit"
+    exit 1
+fi
+
+# Lists all existing branches if no arguments are passed
+if [ "$#" = "0" ]
+then
+    find ".pig/.branches" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+
+# Deletes the branch if '-d' argument is passed
+elif [ "$1" = "-d" ]
+then
+    if [ -e ".pig/.branches/$2" ]
+    then
+        if [ "$2" = "master" ]
+        then
+            echo "pigs-branch: error: can not delete branch '$2': default branch"
+            exit 1
+
+        fi
+        rm -r ".pig/.branches/$2"
+        echo "Deleted branch '$2'"
+
+    else
+        echo "pigs-branch: error: branch '$2' doesn't exist"
+        exit 1
+    fi
+
+# Creates a branch
+else
+    if [ ! -e ".pig/.branches/$1" ]
+    then
+        mkdir ".pig/.branches/$1"
+        mkdir ".pig/.branches/$1/.local_changes"
+        mkdir ".pig/.branches/$1/.repo"
+       
+        for working_dir_file in *
+        do 
+            if [ "$working_dir_file" = "*" ]
+            then 
+                break
+            fi
+            cp "$working_dir_file" ".pig/.branches/$1"
+            
+        done
+       
+        commit_num=$(head -n1 .pig/log.txt | cut -d" " -f1)
+       
+        # Copies the latest commit to the branches ".repo" folder 
+        # for easier status updates
+        for repo_file in .pig/.commit"$commit_num"/*;
+        do 
+        
+            if [ "$repo_file" = ".pig/.commit$commit_num/*" ]
+            then 
+                break
+            fi
+            cp "$repo_file" ".pig/.branches/$1/.repo"
+           
+        done
+        
+    else
+        echo "pigs-branch: error: branch '$1' already exists"
+
+    fi
+fi

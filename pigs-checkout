@@ -1,0 +1,113 @@
+#!/bin/dash
+
+# File that switches to a different branch
+
+# Reads through log.txt and curr_branch.txt to find the latest commit num
+# and the current branch name
+commit_num=$(head -n1 .pig/log.txt | cut -d" " -f1)
+curr_branch=$(head -n1 .pig/curr_branch.txt)
+
+# Throws an error if the user tried to switch to the branch they are currently on
+if [ "$(head -n1 .pig/curr_branch.txt)" = "$1" ]
+then
+    echo "Already on '$1'"
+    exit 1
+fi
+
+if [ -e ".pig/.branches/$1" ]
+then
+    # Updates curr_branch.txt and curr_branch_path.txt
+    echo ".pig/.branches/$1" > ".pig/curr_branch_path.txt"
+    echo "$1" > ".pig/curr_branch.txt"
+    echo "Switched to branch '$1'"
+    
+    # Copies files in files in the current working directory to its branch folder
+    for file in *
+    do
+        if [ "$file" = "*" ]
+        then
+            break
+
+        fi
+
+        if [ "$file" = ".pig" ]
+        then
+            continue
+
+        fi
+
+        curr_branch_pwd=$(find "$PWD" -maxdepth 1 -type f -exec basename {} \; | sort)
+        new_branch_pwd=$(find ".pig/.branches/$1" -maxdepth 1 -type f -exec basename {} \; | sort)
+
+        # Checks if the branches are duplicates with the same file names
+        if [ "$curr_branch_pwd" = "$new_branch_pwd" ]
+        then
+            if (! cmp -s "$file" ".pig/.branches/$1/$file")
+            then
+                # Conditions that check there are local changes that needs to be carried 
+                # over to the branch being checked out to
+                if (! cmp -s ".pig/.commit$commit_num/$file" "$file") &&
+                     (cmp -s ".pig/.branches/$1/$file" ".pig/.branches/$1/.repo/$file")
+                then
+                    cp ".pig/.branches/$1/$file" ".pig/.branches/$1/.local_changes" 
+                    
+                    cp "$file" ".pig/.branches/$1" 
+
+                    mv "$file" ".pig/.branches/$curr_branch" 
+                    
+                else
+                    mv "$file" ".pig/.branches/$curr_branch" 
+
+                fi
+
+            else
+                mv "$file" ".pig/.branches/$curr_branch" 
+
+            fi
+        else
+            mv "$file" ".pig/.branches/$curr_branch" 
+
+        fi
+
+    done
+
+    # Moves all the files of the branched being checked out to to the working directory
+    for branch_file in .pig/.branches/"$1"/*;
+    do
+        if [ "$branch_file" = ".pig/.branches/$1/*" ]
+        then
+            break
+
+        elif [ "$branch_file" = ".pig/.branches/$1/.local_changes" ]
+        then
+            continue
+
+        fi
+        
+        # Conditons that check if there are no current local changes and files can be reverted back to original
+        if [ -f ".pig/.branches/$curr_branch/.local_changes/$(basename "$branch_file")" ] || 
+           [ -f ".pig/.branches/$1/.local_changes/$(basename "$branch_file")" ] 
+            then
+           
+            if (cmp -s "$(basename "$branch_file")" ".pig/.commit$commit_num/$(basename "$branch_file")") &&
+             ! (cmp -s ".pig/.branches/$curr_branch/.local_changes/$(basename "$branch_file")" ".pig/.commit$commit_num/$(basename "$branch_file")")
+            then
+                mv ".pig/.branches/$curr_branch/.local_changes/$(basename "$branch_file")" ".pig/.branches/$curr_branch/$(basename "$branch_file")"
+              
+            elif (cmp -s ".pig/.branches/$curr_branch/$(basename "$branch_file")" ".pig/.commit$commit_num/$(basename "$branch_file")")  &&
+                 (! cmp -s ".pig/.branches/$1/.local_changes/$(basename "$branch_file")" ".pig/.commit$commit_num/$(basename "$branch_file")")
+            then
+                 mv ".pig/.branches/$1/.local_changes/$(basename "$branch_file")" ".pig/.branches/$1/$(basename "$branch_file")"
+
+            fi
+        fi
+            
+        cp "$branch_file" "$PWD"
+        
+    done
+    
+else
+    echo "pigs-checkout: error: unknown branch '$1'"
+    exit 1
+
+fi

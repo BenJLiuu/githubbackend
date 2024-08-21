@@ -1,0 +1,15 @@
+#!/bin/dash
+
+# File that shows the current status of the files in 
+# the current branch's working directory
+
+if [ -e ".pig" ]
+then
+    echo "pigs-init: error: .pig already exists"
+    
+elif [ ! -e ".pig" ]
+then
+    mkdir .pig
+    echo "Initialized empty pigs repository in .pig"
+    
+fi

@@ -1,0 +1,44 @@
+#!/bin/dash
+
+# File that adds a file/s to the index of the repository
+
+if [ ! -e ".pig" ]
+then
+    echo "pigs-add: error: pigs repository directory .pig not found"
+    exit 1
+fi
+
+if [ ! -e ".pig/.index" ]
+then
+    mkdir ".pig/.index"
+
+fi
+
+for file in "$@"
+do
+    # Checks if the file exists, if it does, then the file is copied to the index
+    if [ -f "$file" ]
+    then
+
+        if [ -e ".pig/.index" ]
+        then
+            cp "$file" ".pig/.index"
+            
+        fi
+    # Checks if the file exists, if it doesn't, it throws an error
+    # or is deleted from the index if it exists in there
+    elif [ ! -f "$file" ]
+    then
+        # This means the file was removed from the repo and needs to be committed
+        if [ -f ".pig/.index/$file" ]
+        then
+            rm ".pig/.index/$file"
+
+        else
+            echo "pigs-add: error: can not open '$file'"
+
+        fi
+
+    fi   
+    
+done

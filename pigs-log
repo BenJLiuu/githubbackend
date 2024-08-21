@@ -1,0 +1,10 @@
+#!/bin/dash
+
+# File that shows the logged commits
+
+if [ -f ".pig/log.txt" ]
+then
+   cat ".pig/log.txt"
+
+fi
+

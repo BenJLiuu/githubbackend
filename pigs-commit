@@ -1,0 +1,128 @@
+#!/bin/dash
+
+# File that takes a snapshot of the index and its files
+
+# Finds the latest commit number
+if [ ! -f ".pig/log.txt" ]
+then
+    commit_num=0
+else
+    commit_num=$(head -n1 ".pig/log.txt" | cut -d" " -f1)
+   
+fi
+
+# If the -a argument is called updates all files in the index
+# with its latest version in the working directory
+if [ "$1" = "-a" ]
+then
+   
+    for file in *
+    do
+        if [ -f ".pig/.index/$file" ]
+        then 
+            cp "$file" ".pig/.index"
+        
+        fi
+        
+    done
+ 
+fi
+
+# Checks if theres anything to be commited
+if [ -f ".pig/log.txt" ]
+then
+
+    # Uses the no_update_flag to flag whether or not files in the index have updated
+    # and need to be committed. 0 = no changes, 1 = changed files
+    no_update_flag=1
+    for file in .pig/.index/*;
+    do
+        if [ "$(diff -r -q ".pig/.index" ".pig/.commit$commit_num")" = "" ]
+        then
+            if [ "$(find ".pig/.index" -maxdepth 0 -empty)" ] &&
+               [ "$(find ".pig/.commit$commit_num" -maxdepth 0 -empty)" ]
+            then
+                break
+                
+            fi
+
+            if (! cmp -s "$file" ".pig/.commit$commit_num/$(basename "$file")")
+            then
+                no_update_flag=0
+                break
+                
+            fi
+
+        else
+            no_update_flag=0
+            break
+
+        fi
+
+    done
+      
+fi
+
+if [ "$no_update_flag" = 1 ]
+then
+    echo "nothing to commit"
+    exit 1
+
+# Updates the log.txt with the new commit
+elif [ ! -f ".pig/log.txt" ]
+then
+   echo "0 $2" >> ".pig/log.txt"
+    
+else
+    commit_num=$((commit_num + 1))
+    echo "$commit_num $2\n$(cat .pig/log.txt)" > ".pig/log.txt"
+    
+fi
+
+echo "Committed as commit $commit_num"
+mkdir ".pig/.commit$commit_num"
+
+# Copies all files currently in the index to the new commit directory
+for file in .pig/.index/*;
+    do
+        if [ "$(find ".pig/.index" -maxdepth 0 -empty)" ]
+        then
+            break
+        fi
+        cp "$file" ".pig/.commit$commit_num" 
+        
+    done
+
+if [ -f ".pig/status.txt" ]
+then
+    if [ ! "$(grep -E "file deleted, deleted from index" ".pig/status.txt")" = "" ]
+    then
+        sed -i "/file deleted, deleted from index/d" ".pig/status.txt"
+
+    fi
+fi
+
+# Creates a .branches directory when the first commit is done and makes a master branch (folder)
+# by copying all the files in the working directory to the master folder
+if [ ! -e ".pig/.branches" ]
+then
+    mkdir ".pig/.branches"
+    mkdir ".pig/.branches/master"
+    mkdir ".pig/.branches/master/.local_changes"
+    mkdir ".pig/.branches/master/.repo"
+
+    echo ".pig/.branches/.master" > ".pig/curr_branch_path.txt"
+    echo "master" > ".pig/curr_branch.txt"
+    
+    for working_dir_file in *
+    do 
+        if [ "$working_dir_file" = "*" ]
+        then 
+            break
+
+        fi
+
+        cp "$working_dir_file" ".pig/.branches/master"
+        
+    done
+fi

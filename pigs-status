@@ -1,0 +1,166 @@
+#!/bin/dash
+
+# File that shows the current status of the files in the current branch's working directory
+
+# Finds the latest commit number
+if [ ! -f ".pig/log.txt" ]
+then
+    commit_num=0
+
+else    
+    commit_num=$(head -n1 .pig/log.txt | cut -d" " -f1)
+    
+fi
+
+for file_name in *
+do
+    if [ "$file_name" = "*" ]
+    then
+        break
+
+    fi
+
+    # Checks if the file is already logged in status.txt
+    # if not, adds it and logs it as untracked, staging it 
+    # to be changed later in the script
+    if [ "$(grep -E "^$file_name -")" = "" ]
+    then
+        echo "$file_name - untracked" >> ".pig/status.txt"
+
+    fi
+
+done
+
+# Loops through all files in the working directory, and editing their status
+# according to the changes that have been made to the file, comparing them 
+# to the index and last commit
+for file in *
+do 
+    # Stops the loop if working directory is empty
+    if [ "$file" = "*" ]
+    then
+        break
+    fi
+    
+    # Checks if the current branch is the master branch. If not, checks 
+    # if the current file exists in the current branch and the master branch
+    # if so, then tells it to ignore any changes if the master branch has 
+    # it's file as "same as repo"
+    if [ ! "$(head -n1 .pig/curr_branch.txt)" = "master" ]
+    then
+        if [ -f ".pig/.branches/$(head -n1 .pig/curr_branch.txt)/$file" ]
+        then
+            if [ ! "$(grep -E "^$file - same as repo" ".pig/status.txt")" = "" ]
+            then
+                continue
+
+            fi
+        fi
+    fi
+    
+    # Checks if the current file exists in the last commit and the index currently.
+    # If not, skip this iteration of the loop and leave the file's status as untracked
+    if [ ! -f ".pig/.commit$commit_num/$file" ] && [ ! -f ".pig/.index/$file" ]
+    then
+        continue
+
+    # Conditional statements to judge the current status of the file
+
+    elif [ ! -f ".pig/.index/$file" ] && [ -f ".pig/.commit$commit_num/$file" ] 
+    then
+        sed -i "s/^$file.*/$file - deleted from index/" ".pig/status.txt"
+
+    elif [ -f ".pig/.index/$file" ] && [ ! -f ".pig/.commit$commit_num/$file" ] 
+    then
+        sed -i "s/^$file.*/$file - added to index/" ".pig/status.txt"
+    
+    elif (cmp -s "$file" ".pig/.index/$file")  &&
+         (cmp -s "$file" ".pig/.commit$commit_num/$file")
+    then  
+       sed -i "s/^$file.*/$file - same as repo/" ".pig/status.txt"
+
+    elif (! cmp -s "$file" ".pig/.commit$commit_num/$file") && [ -f ".pig/.index/$file" ] &&
+        (! cmp -s "$file" ".pig/.index/$file")  && (! cmp -s ".pig/.index/$file" ".pig/.commit$commit_num/$file")
+    then
+        sed -i "s/^$file.*/$file - file changed, different changes staged for commit/" ".pig/status.txt"  
+    
+    elif (! cmp -s "$file" ".pig/.commit$commit_num/$file") &&
+         [ -f ".pig/.index/$file" ] && (cmp -s "$file" ".pig/.index/$file")
+    then 
+       sed -i "s/^$file.*/$file - file changed, changes staged for commit/" ".pig/status.txt"
+
+    elif (! cmp -s "$file" ".pig/.commit$commit_num/$file") && [ -f ".pig/.index//$file" ]  &&
+           (cmp -s ".pig/.index/$file" ".pig/.commit$commit_num/$file")
+    then
+        sed -i "s/^$file.*/$file - file changed, changes not staged for commit/" ".pig/status.txt"
+        
+    fi
+   
+done
+
+# Loops through the files of the last commit, to cover for any files that
+# were possibly deleted from the working directory
+for repo_file in .pig/.commit"$commit_num"/*;
+do
+    if [ "$repo_file" = ".pig/.commit$commit_num/*" ]
+    then
+        break
+        
+    fi
+    
+    if [ ! -f "$PWD/$(basename "$repo_file")" ] && [ -f ".pig/.index/$(basename "$repo_file")" ]
+    then
+        # Checks if file exists in the status.txt. If not, creates a new entry
+        # and leaves it as untracked, letting it be edited by sed later
+        if [ "$(grep -E "^$(basename "$repo_file") -")" = "" ]
+        then
+            echo "$(basename "$repo_file") - untracked" >> ".pig/status.txt"
+
+        fi
+
+        sed -i "s/^$(basename "$repo_file").*/$(basename "$repo_file") - file deleted/" ".pig/status.txt"
+        
+    elif [ ! -f "$PWD/$(basename "$repo_file")" ] && [ ! -f ".pig/.index/$(basename "$repo_file")" ]
+    then
+        # Checks if file exists in the status.txt. If not, creates a new entry
+        # and leaves it as untracked, letting it be edited by sed later
+        if [ "$(grep -E "^$(basename "$repo_file") -")" = "" ]
+        then
+            echo "$(basename "$repo_file") - untracked" >> ".pig/status.txt"
+
+        fi
+        
+        sed -i "s/^$(basename "$repo_file").*/$(basename "$repo_file") - file deleted, deleted from index/" ".pig/status.txt"
+        
+    fi
+
+done
+
+# Loops through files in the current index, checking if the file has been changed, or deleted
+for index_file in .pig/.index/*;
+do
+    if [ "$index_file" = ".pig/.index/*" ]
+    then
+
+        break
+    fi
+   
+    if [ ! -f ".pig/.commit$commit_num/$(basename "$index_file")" ] 
+    then
+        if (! cmp -s "$index_file" "$PWD/$(basename "$index_file")") && [ -f "$PWD/$(basename "$index_file")" ] 
+        then
+            sed -i "s/^$(basename "$index_file").*/$(basename "$index_file") - added to index, file changed/" ".pig/status.txt"
+
+        elif [ ! -f "$PWD/$(basename "$index_file")" ] && [ ! -f ".pig/.commit$commit_num/$(basename "$index_file")" ]
+        then 
+            sed -i "s/^$(basename "$index_file").*/$(basename "$index_file") - added to index, file deleted/" ".pig/status.txt"
+
+        fi
+
+    fi
+
+done
+
+sort -u -o ".pig/status.txt" ".pig/status.txt"
+
+cat ".pig/status.txt"

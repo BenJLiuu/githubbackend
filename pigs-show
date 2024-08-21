@@ -1,0 +1,38 @@
+#!/bin/dash
+
+# File that prints the contents of the specified filename as of the specified commit.
+
+commit_num=$(echo "$1" | cut -d':' -f1)
+file_name=$(echo "$1" | cut -d':' -f2)
+
+# if there is no specified commit number, then the file in the index is printed
+if [ -z "$commit_num" ]
+then
+  
+    if [ -f ".pig/.index/$file_name" ]
+    then
+        cat ".pig/.index/$file_name"
+
+    else
+        echo "pigs-show: error: '$file_name' not found in index"
+
+    fi
+
+else
+    if [ -e ".pig/.commit$commit_num" ]
+    then
+        if [ -f ".pig/.commit$commit_num/$file_name" ]
+        then
+            cat ".pig/.commit$commit_num/$file_name"
+
+        else
+            echo "pigs-show: error: '$file_name' not found in commit $commit_num"
+
+        fi
+
+    else
+        echo "pigs-show: error: unknown commit '$commit_num'"
+        
+    fi
+
+fi
